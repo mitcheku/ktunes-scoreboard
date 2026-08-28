@@ -8,6 +8,11 @@
   <style>
     :root { --bg:#0a1020; --surface:#151f38; --surface2:#0f1729; --text:#f5f7ff; --muted:#aeb9d5; --pink:#ff4e9a; --cyan:#62ddff; --line:#344360; --gold:#ffd55d; --danger:#ff9696; }
     * { box-sizing:border-box; } body { margin:0; min-height:100vh; background:radial-gradient(circle at 10% 5%,#3c1645 0,transparent 27%),radial-gradient(circle at 90% 96%,#08394a 0,transparent 31%),var(--bg); color:var(--text); font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; padding:22px max(14px,env(safe-area-inset-right)) calc(42px + env(safe-area-inset-bottom)) max(14px,env(safe-area-inset-left)); }
+    
+    /* Gate app content behind authentication */
+    #appContent { display: none; }
+    body.authenticated #appContent { display: block; }
+
     main { width:min(900px,100%); margin:auto; } header { text-align:center; margin-bottom:18px; position:relative; } h1 { margin:0; color:var(--pink); font-size:clamp(2.1rem,8vw,3.4rem); letter-spacing:.13em; text-shadow:0 0 24px #ff4e9a88; } header p { margin:4px 0 0; color:var(--muted); font-size:.82rem; font-weight:700; letter-spacing:.13em; }
     .panel,.winner-card,.player { background:#151f38e8; border:1px solid #ffffff18; border-radius:16px; box-shadow:0 10px 28px #0005; } .panel { overflow:hidden; }
     .controls { display:grid; grid-template-columns:1fr auto auto; gap:10px; padding:14px; } .controls.compact { grid-template-columns:1fr auto; padding-top:0; }
@@ -19,12 +24,12 @@
     .player { overflow:hidden; margin:10px 0; }.player-top { padding:12px 13px; display:flex; align-items:center; gap:10px; }.rank { width:31px; text-align:center; font-size:1.12rem; font-weight:900; }.player-name { flex:1; font-weight:800; overflow-wrap:anywhere; }.total { color:var(--cyan); font-size:1.12rem; font-weight:900; }.rounds { display:none; padding:13px; background:#0e1628; border-top:1px solid #ffffff13; }.player.open .rounds { display:block; }.rounds-hint { margin:0 0 10px; color:var(--muted); font-size:.75rem; font-weight:700; }.round-grid { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:8px; }.round-grid label { text-align:center; font-size:.65rem; }.round-grid input { min-height:39px; padding:5px 2px; text-align:center; }
     .archive { padding:14px; }.archive-list { display:grid; gap:7px; margin-top:12px; }.archive-row { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:9px 0; border-bottom:1px solid #ffffff13; font-size:.88rem; }.archive-row:last-child { border:0; }.archive-row span { color:var(--muted); }.monthly { padding:16px; background:linear-gradient(130deg,#ffd55d20,#ff4e9a18); border:1px solid #ffd55d75; }.monthly h3 { margin:0; color:var(--gold); font-size:.92rem; letter-spacing:.06em; }.monthly strong { display:block; margin-top:7px; font-size:1.45rem; overflow-wrap:anywhere; }.monthly p { margin:5px 0 0; color:var(--muted); font-size:.86rem; }.empty { padding:32px 14px; text-align:center; color:var(--muted); }.tip { color:var(--muted); font-size:.78rem; line-height:1.45; text-align:center; max-width:660px; margin:16px auto; }
 
-    /* Auth Banner and Modal Styles */
+    /* Modal & Auth Styles */
     .auth-bar { display:flex; justify-content:flex-end; align-items:center; gap:10px; margin-bottom:12px; }
     .user-email { color:var(--cyan); font-size:.85rem; font-weight:700; }
-    .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.7); display:flex; align-items:center; justify-content:center; padding:16px; z-index:100; }
+    .modal-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.85); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; padding:16px; z-index:100; }
     .modal-overlay[hidden] { display:none; }
-    .auth-modal { background:var(--surface); border:1px solid var(--pink); border-radius:16px; width:100%; max-width:400px; padding:20px; box-shadow:0 12px 32px #000; }
+    .auth-modal { background:var(--surface); border:1px solid var(--pink); border-radius:16px; width:100%; max-width:400px; padding:24px; box-shadow:0 12px 32px #000; }
     .auth-modal h2 { margin:0 0 14px; color:var(--pink); font-size:1.3rem; text-align:center; }
     .auth-modal form { display:grid; gap:12px; }
     .auth-modal .auth-error { color:var(--danger); font-size:.8rem; text-align:center; min-height:18px; }
@@ -33,66 +38,68 @@
   </style>
 </head>
 <body>
-  <main>
-    <div class="auth-bar">
-      <span id="userStatus" class="user-email">Not Logged In</span>
-      <button id="authBtn" class="small secondary" type="button">Log In</button>
-    </div>
-
-    <header><h1>K-TUNES</h1><p>LIVE SCOREBOARD & RESULTS ARCHIVE</p></header>
-    
-    <section class="panel">
-      <div class="controls">
-        <label>Scoreboard date<input id="eventDate" type="date"></label>
-        <button id="todayButton" class="secondary" type="button">Today</button>
-        <button id="setRoundsButton" class="secondary" type="button">Set rounds</button>
+  <!-- App content wrapped and hidden until authenticated -->
+  <div id="appContent">
+    <main>
+      <div class="auth-bar">
+        <span id="userStatus" class="user-email"></span>
+        <button id="logoutBtn" class="small secondary" type="button">Log Out</button>
       </div>
-      <div class="controls compact">
-        <label>Rounds for this date (20 or more)<input id="roundCount" type="number" min="20" max="500" inputmode="numeric"></label>
-      </div>
-      <form id="addOneForm" class="add">
-        <input id="oneName" type="text" placeholder="Enter one player name" maxlength="80" autocomplete="off" required>
-        <button type="submit">Add player</button>
-      </form>
-      <form id="addManyForm" class="add">
-        <textarea id="manyNames" placeholder="Add several players: one name per line or separated by commas"></textarea>
-        <button type="submit" class="secondary">Add list</button>
-      </form>
-      <div id="message" class="message" aria-live="polite"></div>
-    </section>
 
-    <section id="dailyWinner" class="winner-card" hidden aria-live="polite">
-      <div class="eyebrow">🏆 DAILY WINNER(S) 🏆</div>
-      <strong id="dailyWinnerNames"></strong>
-      <div id="dailyWinnerScore" class="score"></div>
-      <div class="actions"><button id="dailyCardButton" class="pink" type="button">Save winner image</button></div>
-    </section>
+      <header><h1>K-TUNES</h1><p>LIVE SCOREBOARD & RESULTS ARCHIVE</p></header>
+      
+      <section class="panel">
+        <div class="controls">
+          <label>Scoreboard date<input id="eventDate" type="date"></label>
+          <button id="todayButton" class="secondary" type="button">Today</button>
+          <button id="setRoundsButton" class="secondary" type="button">Set rounds</button>
+        </div>
+        <div class="controls compact">
+          <label>Rounds for this date (20 or more)<input id="roundCount" type="number" min="20" max="500" inputmode="numeric"></label>
+        </div>
+        <form id="addOneForm" class="add">
+          <input id="oneName" type="text" placeholder="Enter one player name" maxlength="80" autocomplete="off" required>
+          <button type="submit">Add player</button>
+        </form>
+        <form id="addManyForm" class="add">
+          <textarea id="manyNames" placeholder="Add several players: one name per line or separated by commas"></textarea>
+          <button type="submit" class="secondary">Add list</button>
+        </form>
+        <div id="message" class="message" aria-live="polite"></div>
+      </section>
 
-    <div class="section-title"><h2 id="resultsHeading">Today’s results</h2><button id="downloadButton" class="secondary small" type="button">Download results</button></div>
-    <section id="players" aria-live="polite"></section>
+      <section id="dailyWinner" class="winner-card" hidden aria-live="polite">
+        <div class="eyebrow">🏆 DAILY WINNER(S) 🏆</div>
+        <strong id="dailyWinnerNames"></strong>
+        <div id="dailyWinnerScore" class="score"></div>
+        <div class="actions"><button id="dailyCardButton" class="pink" type="button">Save winner image</button></div>
+      </section>
 
-    <div class="section-title"><h2>Previous results</h2></div>
-    <section class="panel archive">
-      <label>Check results by date<select id="archiveDate"></select></label>
-      <div id="archiveList" class="archive-list"></div>
-    </section>
+      <div class="section-title"><h2 id="resultsHeading">Today’s results</h2><button id="downloadButton" class="secondary small" type="button">Download results</button></div>
+      <section id="players" aria-live="polite"></section>
 
-    <div class="section-title"><h2>Monthly champion</h2></div>
-    <section class="panel monthly">
-      <h3 id="monthHeading">MONTHLY CHAMPION</h3>
-      <strong id="monthlyNames">No scored events yet</strong>
-      <p id="monthlySummary">Choose a date with scores to determine a monthly champion.</p>
-      <div class="actions"><button id="monthlyCardButton" class="pink small" type="button" disabled>Save monthly winner image</button></div>
-    </section>
-    <p class="tip">The app opens on today’s date automatically. Data is stored locally in this browser, so use the same browser/device to keep your archive. This single-file app is responsive for web, Android and iOS browsers.</p>
-  </main>
-  
-  <canvas id="imageCanvas" width="1080" height="1080" hidden></canvas>
+      <div class="section-title"><h2>Previous results</h2></div>
+      <section class="panel archive">
+        <label>Check results by date<select id="archiveDate"></select></label>
+        <div id="archiveList" class="archive-list"></div>
+      </section>
 
-  <!-- Login/Register Modal -->
-  <div id="authModal" class="modal-overlay" hidden>
+      <div class="section-title"><h2>Monthly champion</h2></div>
+      <section class="panel monthly">
+        <h3 id="monthHeading">MONTHLY CHAMPION</h3>
+        <strong id="monthlyNames">No scored events yet</strong>
+        <p id="monthlySummary">Choose a date with scores to determine a monthly champion.</p>
+        <div class="actions"><button id="monthlyCardButton" class="pink small" type="button" disabled>Save monthly winner image</button></div>
+      </section>
+      <p class="tip">The app opens on today’s date automatically. Data is stored locally in this browser, so use the same browser/device to keep your archive. This single-file app is responsive for web, Android and iOS browsers.</p>
+    </main>
+    <canvas id="imageCanvas" width="1080" height="1080" hidden></canvas>
+  </div>
+
+  <!-- Mandatory Authentication Modal -->
+  <div id="authModal" class="modal-overlay">
     <div class="auth-modal">
-      <h2 id="modalTitle">Firebase Sign In</h2>
+      <h2 id="modalTitle">K-TUNES Sign In</h2>
       <form id="authForm">
         <label>Email Address
           <input id="authEmail" type="email" placeholder="user@example.com" required>
@@ -103,12 +110,11 @@
         <div id="authError" class="auth-error"></div>
         <button id="submitAuthBtn" type="submit">Log In</button>
         <button id="toggleAuthModeBtn" class="secondary" type="button">Switch to Sign Up</button>
-        <button id="closeAuthBtn" class="secondary" type="button">Cancel</button>
       </form>
     </div>
   </div>
 
-  <!-- Firebase Modular SDK Integration -->
+  <!-- Firebase Auth Logic -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
     import { getAnalytics } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-analytics.js";
@@ -134,11 +140,9 @@
     const analytics = getAnalytics(app);
     const auth = getAuth(app);
 
-    // Auth UI Handling
     let isSignUpMode = false;
 
     const authModal = document.getElementById('authModal');
-    const authBtn = document.getElementById('authBtn');
     const authForm = document.getElementById('authForm');
     const authEmail = document.getElementById('authEmail');
     const authPassword = document.getElementById('authPassword');
@@ -147,34 +151,28 @@
     const modalTitle = document.getElementById('modalTitle');
     const submitAuthBtn = document.getElementById('submitAuthBtn');
     const toggleAuthModeBtn = document.getElementById('toggleAuthModeBtn');
-    const closeAuthBtn = document.getElementById('closeAuthBtn');
+    const logoutBtn = document.getElementById('logoutBtn');
 
+    // Protect application content: only render app if authenticated
     onAuthStateChanged(auth, (user) => {
       if (user) {
+        document.body.classList.add('authenticated');
+        authModal.hidden = true;
         userStatus.textContent = user.email;
-        authBtn.textContent = 'Log Out';
       } else {
-        userStatus.textContent = 'Not Logged In';
-        authBtn.textContent = 'Log In';
-      }
-    });
-
-    authBtn.addEventListener('click', () => {
-      if (auth.currentUser) {
-        signOut(auth);
-      } else {
-        authError.textContent = '';
+        document.body.classList.remove('authenticated');
         authModal.hidden = false;
+        userStatus.textContent = '';
       }
     });
 
-    closeAuthBtn.addEventListener('click', () => {
-      authModal.hidden = true;
+    logoutBtn.addEventListener('click', () => {
+      signOut(auth);
     });
 
     toggleAuthModeBtn.addEventListener('click', () => {
       isSignUpMode = !isSignUpMode;
-      modalTitle.textContent = isSignUpMode ? 'Create Account' : 'Firebase Sign In';
+      modalTitle.textContent = isSignUpMode ? 'Create Account' : 'K-TUNES Sign In';
       submitAuthBtn.textContent = isSignUpMode ? 'Sign Up' : 'Log In';
       toggleAuthModeBtn.textContent = isSignUpMode ? 'Switch to Log In' : 'Switch to Sign Up';
       authError.textContent = '';
@@ -192,7 +190,6 @@
         } else {
           await signInWithEmailAndPassword(auth, email, password);
         }
-        authModal.hidden = true;
         authEmail.value = '';
         authPassword.value = '';
       } catch (error) {
@@ -201,6 +198,7 @@
     });
   </script>
 
+  <!-- Scoreboard Application Code -->
   <script>
   (function () {
     const STORAGE_KEY = 'ktunes-scoreboard-v5';
@@ -341,7 +339,7 @@
       player.scores[Number(event.target.dataset.round)] = Math.max(0, Number(event.target.value) || 0);
       render();
     });
-    el('archiveDate').addEventListener('change', () => { if (el('archiveDate').value) { state.selectedDate = el('archiveDate').value; announce('Showing archived results.'); render(); } });
+    el('archiveDate').addEventListener('change', () => { if (el('archiveDate').value) { state.selectedDate = el('archiveDate').value; announce('Showing archived results.'); render(); render(); } });
     el('archiveList').addEventListener('click', (event) => { const button = event.target.closest('.open-date'); if (!button) return; state.selectedDate = button.dataset.date; announce('Showing archived results.'); render(); window.scrollTo({ top:0, behavior:'smooth' }); });
     function download(blob, filename) { const link = document.createElement('a'); link.href = URL.createObjectURL(blob); link.download = filename; link.click(); setTimeout(() => URL.revokeObjectURL(link.href), 750); }
     el('downloadButton').addEventListener('click', () => {
